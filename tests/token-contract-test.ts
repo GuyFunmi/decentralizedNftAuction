@@ -2,51 +2,116 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { MockProvider } from '@stacks/blockchain-api-client';
 import { callReadOnlyFunction, callContractFunction } from '@stacks/transactions';
 
-describe('NFT Auction Contract', () => {
+describe('Fungible Token Contract', () => {
   let mockProvider: MockProvider;
+  const contractAddress = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM';
+  const contractName = 'fungible-token';
 
   beforeEach(() => {
     mockProvider = new MockProvider();
   });
 
-  it('should create an auction for an owned NFT', async () => {
-    // First, mint an NFT
-    await callContractFunction({
-      network: mockProvider.getNetwork(),
-      contractAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-      contractName: 'nft-marketplace',
-      functionName: 'mint-nft',
-      functionArgs: ['1'],
-      senderAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-    });
+  it('should mint tokens successfully', async () => {
+    const recipient = 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG';
+    const amount = 1000;
 
-    // Now, create an auction
     const result = await callContractFunction({
       network: mockProvider.getNetwork(),
-      contractAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-      contractName: 'nft-auction',
-      functionName: 'create-auction',
-      functionArgs: ['1', '100'],
-      senderAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+      contractAddress,
+      contractName,
+      functionName: 'mint-tokens',
+      functionArgs: [recipient, amount.toString()],
+      senderAddress: contractAddress,
     });
 
     expect(result.success).toBe(true);
+
+    const balance = await callReadOnlyFunction({
+      network: mockProvider.getNetwork(),
+      contractAddress,
+      contractName,
+      functionName: 'get-balance',
+      functionArgs: [recipient],
+    });
+
+    expect(balance.value).toBe(amount);
   });
 
-  it('should fail to create an auction for an unowned NFT', async () => {
+  it('should transfer tokens successfully', async () => {
+    const sender = 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG';
+    const recipient = 'ST3AM1A56AK2C1XAFJ4115ZSV26EB49BVQ10MGCS0';
+    const initialAmount = 1000;
+    const transferAmount = 500;
+
+    // First, mint tokens for the sender
+    await callContractFunction({
+      network: mockProvider.getNetwork(),
+      contractAddress,
+      contractName,
+      functionName: 'mint-tokens',
+      functionArgs: [sender, initialAmount.toString()],
+      senderAddress: contractAddress,
+    });
+
+    // Now, transfer tokens
     const result = await callContractFunction({
       network: mockProvider.getNetwork(),
-      contractAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-      contractName: 'nft-auction',
-      functionName: 'create-auction',
-      functionArgs: ['2', '100'],
-      senderAddress: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+      contractAddress,
+      contractName,
+      functionName: 'transfer-tokens',
+      functionArgs: [sender, recipient, transferAmount.toString()],
+      senderAddress: sender,
+    });
+
+    expect(result.success).toBe(true);
+
+    const senderBalance = await callReadOnlyFunction({
+      network: mockProvider.getNetwork(),
+      contractAddress,
+      contractName,
+      functionName: 'get-balance',
+      functionArgs: [sender],
+    });
+
+    const recipientBalance = await callReadOnlyFunction({
+      network: mockProvider.getNetwork(),
+      contractAddress,
+      contractName,
+      functionName: 'get-balance',
+      functionArgs: [recipient],
+    });
+
+    expect(senderBalance.value).toBe(initialAmount - transferAmount);
+    expect(recipientBalance.value).toBe(transferAmount);
+  });
+
+  it('should fail to transfer tokens if balance is insufficient', async () => {
+    const sender = 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG';
+    const recipient = 'ST3AM1A56AK2C1XAFJ4115ZSV26EB49BVQ10MGCS0';
+    const initialAmount = 500;
+    const transferAmount = 1000;
+
+    // First, mint tokens for the sender
+    await callContractFunction({
+      network: mockProvider.getNetwork(),
+      contractAddress,
+      contractName,
+      functionName: 'mint-tokens',
+      functionArgs: [sender, initialAmount.toString()],
+      senderAddress: contractAddress,
+    });
+
+    // Now, try to transfer more tokens than the sender has
+    const result = await callContractFunction({
+      network: mockProvider.getNetwork(),
+      contractAddress,
+      contractName,
+      functionName: 'transfer-tokens',
+      functionArgs: [sender, recipient, transferAmount.toString()],
+      senderAddress: sender,
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('u200');
+    expect(result.error).toBe('u101');
   });
-
-  it('should place a valid bid', async () => {
-    // First, create an auction
-    await cal
+});
